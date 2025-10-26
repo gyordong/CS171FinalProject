@@ -28,7 +28,7 @@ Sex
 
 Example page from Hong Kong Jockey Club database:
 
-[hkdbimage](hkracehorse.png)
+![hkdbimage](hkracehorse.png)
 
 Margin and Finish Time will also be the predicted values for the multiple linear regression models.
 
