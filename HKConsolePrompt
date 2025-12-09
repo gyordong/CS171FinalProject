@@ -1,0 +1,56 @@
+(() => {
+  const frame = [...document.querySelectorAll("iframe")].find(f =>
+    f.src.includes("Performance")
+  );
+  const doc = frame ? frame.contentDocument || frame.contentWindow.document : document;
+  const performanceTable = doc.querySelector("table.bigborder");
+  if (!performanceTable) {
+    console.error("Could not find the performance table on this page.");
+    return;
+  }
+  const horseName = (doc.querySelector(".title_text")?.textContent.trim()) || "";
+  
+  const sexRow = [...doc.querySelectorAll("td")].find(td =>
+    td.textContent.includes("Colour / Sex")
+  );
+  let rawSex = sexRow?.nextElementSibling?.nextElementSibling?.textContent.trim().split("/")[1]?.trim().toLowerCase() || "";
+  
+  let sex = "Gelding";
+  if (rawSex.includes("gelding")) {
+    sex = "Gelding";
+  } else if (rawSex.includes("stallion") || rawSex.includes("colt")) {
+    sex = "Stallion";
+  } else if (rawSex.includes("mare") || rawSex.includes("filly")) {
+    sex = "Mare";
+  }
+  
+  const tableClone = performanceTable.cloneNode(true);
+  
+  tableClone.querySelectorAll('td:last-child').forEach(td => {
+    if (td.querySelector('img[alt*="Replay"]')) {
+      td.remove();
+    }
+  });
+  
+  let combined = `<div id="hk_race_data"><span class="horse_name">${horseName}</span><span class="horse_sex">${sex}</span>${tableClone.outerHTML}</div>`
+    .replace(/\s{2,}/g, " ")
+    .replace(/\n+/g, "")
+    .replace(/>\s+</g, "><")
+    .trim();
+  const MAX = 49000;
+  if (combined.length > MAX) {
+    combined = combined.slice(0, MAX) + "</table></div>";
+  }
+  
+  console.log(combined);
+  
+  try {
+    navigator.clipboard.writeText(combined).then(() => {
+      console.log("Copied to clipboard");
+    }).catch(() => {
+      console.log("Auto-copy failed. Please copy manually.");
+    });
+  } catch (e) {
+    console.log("Auto-copy not available. Please copy manually.");
+  }
+})();
