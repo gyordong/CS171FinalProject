@@ -1,0 +1,210 @@
+function onEdit(e) {
+  if (!e) return;
+  const sheet = e.source.getActiveSheet();
+  const name = sheet.getName();
+  const range = e.range;
+
+  // --- JP ---
+  if (name === "JP Race Horses" && range.getA1Notation() === "B1") {
+    handleJPRaceHorses(e);
+    return;
+  }
+
+  // --- HK ---
+  if (name === "HK Race Horses" && range.getA1Notation() === "B1") {
+    handleHKRaceHorses(e);
+    return;
+  }
+}
+
+/* ------------------ JP ------------------ */
+function handleJPRaceHorses(e) {
+  const sheet = e.source.getSheetByName("JP Race Horses");
+  const range = e.range;
+  let html = range.getValue();
+
+  if (typeof html === "string" && html.trim().startsWith("=")) html = "'" + html;
+  if (!html || html.length < 100) return;
+
+  let horseName = "";
+  const titleMatch = html.match(/<title[^>]*>Race Records\s*\|\s*([^(|<]+)/i);
+  if (titleMatch) horseName = titleMatch[1].trim();
+
+  let sex = "Mare";
+  if (html.match(/Stallion Reports/i)) sex = "Stallion";
+
+  const dataMatch = html.match(/<div class="data-6-31[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/i);
+  if (!dataMatch) return;
+
+  const dataHtml = dataMatch[1];
+  const raceMatches = [...dataHtml.matchAll(/<div>\s*<div>([^<][\s\S]*?)<\/div>\s*<\/div>\s*(?=<div>|$)/g)];
+  const data = [];
+  const startIndex = raceMatches.length > 0 && raceMatches[0][0].includes('Date') ? 1 : 0;
+
+  for (let i = startIndex; i < raceMatches.length; i++) {
+    const block = raceMatches[i][0];
+    const cells = [...block.matchAll(/<div[^>]*>([\s\S]*?)<\/div>/g)]
+      .map(m => m[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
+    if (cells.length < 5) continue;
+
+    const date = cells[0] || "";
+    const course = cells[1] || "";
+    const raceName = cells[2] || "";
+    const finishPosition = cells[3] || "";
+    const track = cells[4] || "";
+    const distance = cells[5] || "";
+    const condition = cells[6] || "";
+
+    let finishTime = "", margin = "";
+    const timeMarginCell = cells.find(c => /\d+:\d+\.\d+/.test(c));
+    if (timeMarginCell) {
+      const tm = timeMarginCell.match(/(\d+:\d+\.\d+)\s*(?:\(([0-9.]+)\)|([0-9.]+))?/);
+      if (tm) { finishTime = tm[1] || ""; margin = tm[2] || tm[3] || ""; }
+    }
+
+    let weight = "";
+    const weightCell = cells.find(c => /\d+\s*\([+-]?\d+\)/.test(c));
+    if (weightCell) weight = weightCell;
+
+    data.push([horseName, date, raceName, course, track, distance, condition, finishTime, finishPosition, margin, weight, sex]);
+  }
+
+  if (!data.length) return;
+  const startRow = Math.max(3, sheet.getLastRow() + 1);
+  sheet.getRange(startRow, 1, data.length, data[0].length).setValues(data);
+  range.clearContent();
+}
+
+/* ------------------ HK ------------------ */
+function handleHKRaceHorses(e) {
+  const sheet = e.source.getSheetByName("HK Race Horses");
+  const html = sheet.getRange("B1").getValue();
+  if (!html || html.length < 100) {
+    Logger.log("No valid HTML found in B1");
+    return;
+  }
+
+  // Extract horse name and sex
+  const nameMatch = html.match(/<span class="horse_name">([^<]+)<\/span>/i);
+  const horseName = nameMatch ? nameMatch[1].trim() : "";
+
+  const sexMatch = html.match(/<span class="horse_sex">([^<]+)<\/span>/i);
+  let rawSex = sexMatch ? sexMatch[1].trim().toLowerCase() : "";
+  
+  // Convert Gelding to Stallion (treat as male)
+  let sex = "Mare"; // Default
+  if (rawSex.includes("gelding") || rawSex.includes("stallion") || rawSex.includes("colt")) {
+    sex = "Stallion";
+  } else if (rawSex.includes("mare") || rawSex.includes("filly")) {
+    sex = "Mare";
+  }
+
+  // Extract race table
+  const tableMatch = html.match(/<table[^>]*class="?bigborder"?[^>]*>([\s\S]*?)<\/table>/i);
+  if (!tableMatch) {
+    Logger.log("No race table found");
+    return;
+  }
+
+  const rows = [...tableMatch[1].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)];
+  const data = [];
+
+  for (const r of rows) {
+    const row = r[1];
+    
+    // Skip headers and season dividers
+    if (/hsubheader|htable_bold_text|bgcolor=["']?(#CFC79D|#DBC9AE|#9EAFCF)["']?/i.test(row)) continue;
+
+    const cells = [...row.matchAll(/<td[^>]*class="?htable_eng_text"?[^>]*>([\s\S]*?)<\/td>/g)]
+      .map(m => m[1].replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim());
+    
+    if (cells.length < 10) continue;
+
+    // Convert date from DD/MM/YY to "Mon DD,YYYY" format - force as text
+    let date = cells[2] || "";
+    if (date) {
+      // Handle if already converted by Sheets or in original format
+      const dateMatch = date.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      if (dateMatch) {
+        let day = parseInt(dateMatch[1]);
+        let month = parseInt(dateMatch[2]);
+        let year = dateMatch[3];
+        
+        // DD/MM/YY format
+        if (day <= 31 && month <= 12) {
+          // Swap if it looks like MM/DD was detected
+          if (day > 12) {
+            // day is definitely day (>12 can't be month)
+            // keep as is
+          } else if (month > 12) {
+            // month value >12, so it must be day
+            [day, month] = [month, day];
+          }
+        }
+        
+        year = year.length === 2 ? "20" + year : year;
+        
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const monthName = monthNames[month - 1];
+        
+        date = `${monthName} ${day},${year}`; // e.g., "Nov 2,2025"
+      }
+    }
+    
+    const rcTrack = cells[3] || "";
+    const parts = rcTrack.split('/').map(p => p.trim().replace(/["']/g, ''));
+    
+    // Expand course codes to full names
+    let course = parts[0] || "";
+    const courseMap = {
+      "HV": "HAPPY VALLEY",
+      "ST": "SHA TIN"
+    };
+    course = courseMap[course] || course;
+    const track = parts[1] || "";
+    
+    // Race Index goes to RACENAME column
+    const raceName = cells[0] || "";  // Race Index (149, 119, 846, etc.)
+    
+    const distance = (cells[4] || "").replace(/M$/i, '');
+    
+    // Convert condition codes to full names
+    let condition = cells[5] || "";
+    const conditionMap = {
+      "GF": "GOOD TO FIRM",
+      "G": "GOOD",
+      "GY": "GOOD TO YIELDING",
+      "Y": "YIELDING",
+      "S": "SOFT",
+      "H": "HEAVY"
+    };
+    condition = conditionMap[condition] || condition;
+    
+    const finishTime = cells[15] || "";
+    const finishPosition = cells[1] || "";
+    const weight = cells[13] || "";
+    
+    // Extract margin from LBW
+    const lbwText = cells[11] || "";
+    let margin = "";
+    if (/^(SH|N|HD|NK)$/i.test(lbwText)) {
+      margin = lbwText;
+    } else {
+      const fractionMatch = lbwText.match(/(\d+(?:-\d+\/\d+)?)/);
+      if (fractionMatch) margin = fractionMatch[1];
+    }
+
+    // NAME, DATE, RACENAME (Race Index), COURSE, TRACK, DISTANCE, CONDITION, FINISHTIME, FINISHPOSITION, MARGIN, WEIGHT, SEX
+    data.push([horseName, date, raceName, course, track, distance, condition, finishTime, finishPosition, margin, weight, sex]);
+  }
+
+  if (!data.length) {
+    Logger.log("No valid race data found");
+    return;
+  }
+
+  const startRow = Math.max(3, sheet.getLastRow() + 1);
+  sheet.getRange(startRow, 1, data.length, data[0].length).setValues(data);
+  sheet.getRange("B1").clearContent();
+}
