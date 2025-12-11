@@ -4,6 +4,13 @@
 Andrei Duque (Github: https://github.com/aduques)
 Ryan Duong (Github: https://github.com/gyordong)
 
+## Installation Requirements
+
+pandas 2.3+
+numpy 2.0+
+scikit-learn 1.7+
+matplotlib 3.10+
+
 ## Description of Question and Research Topic (5 Sentences)
 Throughout this project, we want to identify the common characteristics that Japanese Race Horse winners and Hong Kong Race Horse winners have and determine if there are characteristics that dominating horses tend to have. We want to be able to predict metrics that are used to measure the likelihood of a horse winning a race and its competitive dominance, such as race times and winning margins. Since the two datasets have different attributes recorded, we have to find the common attributes, and find out what the relationship of the available data is and the predicted race times and winning margins (multiple linear regression model).
 
@@ -97,3 +104,9 @@ Project Timeline:
 12/2 - Presentations
 
 12/11 - Final Submission
+
+### Future Work
+
+* Modify hyperparameters like learning rate
+* Update with present data
+* Identify more features to increase accuracy
