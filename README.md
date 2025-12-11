@@ -1,7 +1,7 @@
 ## Project Title: The Oguri Model
 
 ## Authors: Ryan Duong, Andrei Duque
-Andrei Duque (Github: https://github.com/aduques)
+Andrei Duque (Github: https://github.com/aduques)  
 Ryan Duong (Github: https://github.com/gyordong)
 
 ## Installation Requirements
